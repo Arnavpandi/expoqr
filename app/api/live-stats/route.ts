@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 
+// Never statically prerender: this feed must reflect the table on every hit.
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/live-stats
  * PUBLIC proof page feed: aggregate counts only — no names, no phone numbers.
