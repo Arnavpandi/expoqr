@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
+import { hasValidKey } from '@/lib/auth';
 
 type CheckinBody = {
   qr_token?: string;
@@ -15,6 +16,13 @@ const UUID_RE =
  * Idempotent: already-checked-in tokens return 200 with already_checked_in: true.
  */
 export async function POST(req: NextRequest) {
+  if (!hasValidKey(req)) {
+    return NextResponse.json(
+      { error: 'Unauthorized — staff key required' },
+      { status: 401 }
+    );
+  }
+
   let body: CheckinBody;
   try {
     body = (await req.json()) as CheckinBody;
@@ -56,10 +64,26 @@ export async function POST(req: NextRequest) {
 
     const { error: updateError } = await supabase
       .from('visitors')
-      .update({ checked_in: true })
+      .update({ checked_in: true, checked_in_at: new Date().toISOString() })
       .eq('id', visitor.id);
 
-    if (updateError) throw updateError;
+    if (updateError) {
+      // Resilience: if the checked_in_at migration hasn't been run yet
+      // (Postgres 42703 = undefined column), still complete the check-in —
+      // the gate must never break because of a missing timestamp column.
+      if ((updateError as { code?: string }).code === '42703') {
+        console.warn(
+          'checked_in_at column missing — checking in without timestamp'
+        );
+        const { error: retryError } = await supabase
+          .from('visitors')
+          .update({ checked_in: true })
+          .eq('id', visitor.id);
+        if (retryError) throw retryError;
+      } else {
+        throw updateError;
+      }
+    }
 
     return NextResponse.json({
       ok: true,

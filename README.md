@@ -124,7 +124,15 @@ PHASES.md                 Phase-by-phase walkthrough
 
 - The `SUPABASE_SERVICE_ROLE_KEY` bypasses RLS — it lives **only** in server
   code and the feedback script, never in the browser.
-- `/scan` is "hidden" by obscurity — for real events, put it behind a simple
-  shared secret or Vercel password protection.
+- `/scan`, `/dashboard`, `/api/checkin` and `/api/visitors` are gated by a
+  shared staff secret (`middleware.ts`): staff open `/scan?key=<ADMIN_KEY>` or
+  `/dashboard?key=<ADMIN_KEY>` once and a 30-day httpOnly cookie keeps that
+  device authorized; everyone else gets 401. Set `ADMIN_KEY` in `.env.local`
+  locally and in Vercel's Environment Variables (Production). The dashboard
+  auto-refreshes every 3 seconds, so gate scans show up live.
+- `/live` is the **public** proof page for organizer outreach: live aggregate
+  counts (registered / checked in / awaiting) plus recent check-in times via
+  `/api/live-stats`. It is deliberately NOT gated by `middleware.ts` and
+  returns no names or phone numbers — the keyed staff dashboard stays private.
 - Check-in writes go through `/api/checkin` with a strict UUID check; unknown
   tokens are rejected.

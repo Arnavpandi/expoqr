@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 type Tone = 'green' | 'amber' | 'red';
 type ScanResult = { tone: Tone; title: string; detail?: string };
@@ -33,7 +34,8 @@ function beep(freq: number, secs: number) {
   }
 }
 
-export default function ScanPage() {
+function ScanInner() {
+  const key = useSearchParams().get('key');
   const [result, setResult] = useState<ScanResult | null>(null);
   const [processing, setProcessing] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -91,11 +93,14 @@ export default function ScanPage() {
     processingRef.current = true;
     setProcessing(true);
     try {
-      const res = await fetch('/api/checkin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ qr_token: decodedText.trim() }),
-      });
+      const res = await fetch(
+        `/api/checkin?key=${encodeURIComponent(key ?? '')}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ qr_token: decodedText.trim() }),
+        }
+      );
       const data = (await res.json()) as {
         ok?: boolean;
         already_checked_in?: boolean;
@@ -121,10 +126,18 @@ export default function ScanPage() {
           beep(880, 0.15);
         }
       } else {
+        const denied = res.status === 401;
         setResult({
           tone: 'red',
-          title: res.status === 404 ? 'UNKNOWN BADGE' : 'SCAN ERROR',
-          detail: data.error,
+          title:
+            res.status === 404
+              ? 'UNKNOWN BADGE'
+              : denied
+                ? 'ACCESS DENIED'
+                : 'SCAN ERROR',
+          detail: denied
+            ? 'Invalid staff key — ask your organizer for the staff link.'
+            : data.error,
         });
         beep(220, 0.3);
       }
@@ -144,6 +157,9 @@ export default function ScanPage() {
     }
   };
 
+  // NOTE: access is gated by middleware.ts (ADMIN_KEY via ?key= or staff cookie).
+  // The key is forwarded on check-in calls for robustness when cookies
+  // are unavailable.
   return (
     <main className="min-h-screen bg-slate-950 p-4 text-slate-100">
       <div className="mx-auto max-w-lg">
@@ -181,5 +197,19 @@ export default function ScanPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function ScanPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-slate-950 p-4 text-slate-100">
+          <p className="mt-8 text-center text-slate-400">Loading scanner…</p>
+        </main>
+      }
+    >
+      <ScanInner />
+    </Suspense>
   );
 }
