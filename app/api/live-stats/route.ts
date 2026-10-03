@@ -3,6 +3,8 @@ import { getServiceClient } from '@/lib/supabase';
 
 // Never statically prerender: this feed must reflect the table on every hit.
 export const dynamic = 'force-dynamic';
+// And never serve the DB read from Next's Data Cache either.
+export const fetchCache = 'force-no-store';
 
 /**
  * GET /api/live-stats

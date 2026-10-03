@@ -6,7 +6,13 @@ import { hasValidKey } from '@/lib/auth';
  * GET /api/visitors?key=SECRET
  * Staff-only live feed for the organizer dashboard.
  * Returns every visitor with check-in state, newest first.
+ *
+ * Caching is fully disabled (dynamic + force-no-store): the dashboard polls
+ * this every 3 seconds and must see each scan immediately.
  */
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+
 export async function GET(req: NextRequest) {
   if (!hasValidKey(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
